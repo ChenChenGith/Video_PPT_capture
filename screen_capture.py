@@ -1,9 +1,11 @@
+# Repositories url: https://github.com/ChenChenGith/Video_PPT_capture
+
+# version: 0.1.0
+# license: MIT
+
 from PIL import ImageGrab
 import time
 import numpy as np
-
-# thanks：https://www.zhihu.com/question/667759022
-
 import tkinter as tk
 from tkinter import filedialog
 import sys, os
