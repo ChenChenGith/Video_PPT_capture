@@ -3,22 +3,34 @@
 # version: 0.1.0
 # license: MIT
 
-from PIL import ImageGrab
+from PIL import ImageGrab, ImageChops, ImageStat
 import time
-import numpy as np
 import tkinter as tk
 from tkinter import filedialog
 import sys, os
+from screeninfo import get_monitors
+
+def get_all_display_info():
+    x, y = [], []
+    for m in get_monitors():
+        x.append(m.x)
+        x.append(m.x + m.width)
+        y.append(m.y)
+        y.append(m.y + m.height)
+    
+    return max(x) - min(x), max(y) - min(y), min(x), min(y)
 
 class Capture_window_select(object):
     def __init__(self, capture_window=None):
         self.window = tk.Tk()
-        self.width = self.window.winfo_screenwidth()
-        self.height = self.window.winfo_screenheight()
-
         self.window.overrideredirect(True)         # 隐藏窗口的标题栏
         self.window.attributes("-alpha", 0.5)      # 窗口透明度10%
-        self.window.geometry("{0}x{1}+0+0".format(self.width, self.height))
+        
+        self.width, self.height, self.x, self.y = get_all_display_info()
+        
+        # self.width = self.window.winfo_screenwidth()
+        # self.height = self.window.winfo_screenheight()
+        self.window.geometry("{0}x{1}+{2}+{3}".format(self.width, self.height, self.x, self.y))
 
         self.window.bind('<Escape>', self.exit_1)
         self.window.bind('<Return>', self.exit_2)
@@ -35,7 +47,7 @@ class Capture_window_select(object):
         else:
             self.remember = 0, 0, self.width, self.height
 
-        self.canvas.create_text(self.width - 500, self.height - 500, text=f"Esc", fill="red", tags="info", font=("Arial", 16))
+        self.canvas.create_text(self.width - 500, self.height - 500, text=f"Esc: Full-screen\nLeft click and move: select capture region\nEnter: Confirm selection", fill="red", tags="info", font=("Arial", 30))
 
         self.window.focus_force()
         self.window.mainloop()
@@ -51,23 +63,29 @@ class Capture_window_select(object):
             pass
         self.window.destroy()
         self.window.quit()
+        
+    def rel2abs(self, x, y):
+        return x + self.x, y + self.y
     
     def selection_start(self, event):
         self.canvas.delete("rect", "text")
-        self.start_x = event.x
-        self.start_y = event.y
-        self.rect = self.canvas.create_rectangle(self.start_x, self.start_y, self.start_x, self.start_y, outline='red', width=2, tags="rect", dash=(4, 4))
-        self.canvas.create_text(self.start_x + 35, self.start_y + 10, text=f"({self.start_x}, {self.start_y})", fill="red", tags="text")
+        self.win_start_x = event.x
+        self.win_start_y = event.y
+        self.rect = self.canvas.create_rectangle(self.win_start_x, self.win_start_y, self.win_start_x, self.win_start_y, outline='red', width=2, tags="rect", dash=(4, 4))
+        
+        self.start_x, self.start_y = self.rel2abs(event.x, event.y)
+        
+        self.canvas.create_text(self.win_start_x + 35, self.win_start_y + 10, text=f"({self.start_x}, {self.start_y})", fill="red", tags="text")
     
     def selection_end(self, event):
-        self.end_x = event.x
-        self.end_y = event.y
-        self.capture_window = (self.start_x, self.start_y, self.end_x, self.end_y)
-        self.canvas.create_text(self.end_x - 90, self.end_y - 25, text=f"({self.end_x}, {self.end_y})({self.end_x-self.start_x}X{self.end_y-self.start_y})", fill="red", tags="text")
-        self.canvas.create_text(self.end_x - 100, self.end_y - 10, text="Press Enter to confirm selection", fill="red", tags="text")
+        self.win_end_x = event.x
+        self.win_end_y = event.y
+        self.end_x, self.end_y = self.rel2abs(event.x, event.y)
+        self.canvas.create_text(self.win_end_x - 90, self.win_end_y - 25, text=f"({self.end_x}, {self.end_y})({self.end_x-self.start_x}X{self.end_y-self.start_y})", fill="red", tags="text")
+        self.canvas.create_text(self.win_end_x - 100, self.win_end_y - 10, text="Press Enter to confirm selection", fill="red", tags="text")
 
     def change_selection(self, event):
-        self.canvas.coords(self.rect, self.start_x, self.start_y, event.x, event.y)
+        self.canvas.coords(self.rect, self.win_start_x, self.win_start_y, event.x, event.y)
     
     def get_capture_window_coor(self):
         x1, y1, x2, y2 = self.remember
@@ -196,7 +214,9 @@ class ScreenCapture(object):
 
         im2 = ImageGrab.grab(bbox=self.capture_window, include_layered_windows=False, all_screens=True)
 
-        diff = np.mean((np.array(self.im) - np.array(im2))**2) / (self.im_l * self.im_w)
+        diff = ImageChops.difference(self.im, im2)
+        diff = sum(ImageStat.Stat(diff).mean)
+        # diff = np.mean((np.array(self.im) - np.array(im2))**2) / (self.im_l * self.im_w)
         if  diff> self.sensitivity:
             if self.is_capturing: 
                 im2.save(rf'{self.save_path}\{self.time_str}.png')
