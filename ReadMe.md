@@ -6,8 +6,20 @@ The exe program can be found in the releas page: [Release Video_PPT_Capture_v0.1
 
 ![1737192117301](image/ReadMe/1737192117301.png)
 
+# Update
 
-TODO:
+## 20250120
 
-- test on multiple displays
-- allow users to config if display float window
+Support multi-screen with any layout.
+
+Remove Numpy to reduce the exe size (from 35M to 12M, have not release).
+
+Modify the initial location of the float window, to let user note it.
+
+Add a checkbox to allow user to chose whether display float window.
+
+# TODO:
+
+- [X] Test on multiple displays
+- [X] Allow users to config whether display float window
+- [ ] Allow users to config using json file

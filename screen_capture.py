@@ -105,8 +105,8 @@ class ScreenCapture(object):
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("PPT in Video Capture Tool. CC:ChenChenGith@github")
-        win_width, win_height = int(min(self.root.winfo_screenwidth()/4, 500)), int(min(self.root.winfo_screenheight(), 500))
-        self.root.geometry("{0}x{1}+0+0".format(win_width, win_height))
+        self.win_width, self.win_height = int(min(self.root.winfo_screenwidth()/4, 500)), int(min(self.root.winfo_screenheight(), 500))
+        self.root.geometry("{0}x{1}+0+0".format(self.win_width, self.win_height))
         
         self.root.iconbitmap(get_resource_path("./ycy.ico"))
 
@@ -147,6 +147,13 @@ class ScreenCapture(object):
         # 退出按钮
         self.btn_sys_out = tk.Button(self.root, text="Exit", command=self.sys_out)
         self.btn_sys_out.place(relx=0.70, rely=0.88, relwidth=0.28, relheight=0.07)
+        
+        # 是否显示浮动窗口复选框
+        self.is_show_state_window_var = tk.BooleanVar()
+        self.is_show_state_window = tk.Checkbutton(self.root, text="Show State Window", command=self.show_state_window, variable=self.is_show_state_window_var)
+        self.is_show_state_window.select()
+        self.is_show_state_window.place(relx=0.05, rely=0.95, relwidth=0.3, relheight=0.05)
+        
 
         
         self.sensitivity = None
@@ -160,13 +167,19 @@ class ScreenCapture(object):
         self.__init_state_window()
 
         self.root.mainloop()
+        
+    def show_state_window(self):
+        if self.is_show_state_window_var.get():
+            self.state_window.deiconify()
+        else:
+            self.state_window.withdraw()
 
     def __init_state_window(self):
         self.state_window = tk.Toplevel()
         self.state_window.attributes("-topmost", True)  # 窗口置顶
         self.state_window.overrideredirect(True)         # 隐藏窗口的标题栏
         self.state_window.attributes("-alpha", 0.3)      # 窗口透明度10%
-        self.state_window.geometry("{0}x{1}+{2}+{3}".format(40, 20, self.state_window.winfo_screenwidth()-80, self.state_window.winfo_screenheight() - 80))
+        self.state_window.geometry("{0}x{1}+{2}+{3}".format(40, 20, self.win_width - 200, 70))
 
         self.label_capture_state = tk.Label(self.state_window, text="C", bg="orange")
         self.label_capture_state.place(relx=0.5, rely=0, relwidth=0.5, relheight=1)
@@ -220,11 +233,11 @@ class ScreenCapture(object):
         if  diff> self.sensitivity:
             if self.is_capturing: 
                 im2.save(rf'{self.save_path}\{self.time_str}.png')
-                self.text_info.insert("end", f"\n{self.time_str}:\n   diff={diff:.2f}, PPT slide change detected!\n")
+                self.text_info.insert("end", f"\n{self.time_str}:\n   diff={diff:.1f}, PPT slide change detected!\n")
                 self.text_info.see("end")
                 self.update_capture_state('on')
         else:
-            if self.is_capturing: self.text_info.insert("end", ".")
+            if self.is_capturing: self.text_info.insert("end", f"E={diff:.1f};")
         
         self.im = im2
 
