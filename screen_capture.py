@@ -137,13 +137,18 @@ class ScreenCapture(object):
         tk.Label(self.root, text="Img. Save Path", fg='gray').place(relx=0.72, rely=0.59, relwidth=0.28, relheight=0.05)
         self.label_save_path = tk.Text(self.root, fg="gray", bd=0)
         self.label_save_path.insert("end", "None")
-        self.label_save_path.place(relx=0.70, rely=0.64, relwidth=0.28, relheight=0.1)
+        self.label_save_path.place(relx=0.70, rely=0.64, relwidth=0.15, relheight=0.1)
+
+        self.btn_save_path_open = tk.Button(self.root, text="Open\nFold", command=self.open_save_path, state="disabled")
+        self.btn_save_path_open.place(relx=0.86, rely=0.64, relwidth=0.12, relheight=0.1)
+
+
         # 开始截图按钮
         self.btn_start = tk.Button(self.root, text="Start", command=self.start_capture, state="disabled")
         self.btn_start.place(relx=0.70, rely=0.76, relwidth=0.12, relheight=0.1)
         # 停止截图按钮
         self.btn_stop = tk.Button(self.root, text="Stop", command=self.stop_capture, state="disabled")
-        self.btn_stop.place(relx=0.85, rely=0.76, relwidth=0.12, relheight=0.1)
+        self.btn_stop.place(relx=0.86, rely=0.76, relwidth=0.12, relheight=0.1)
         # 退出按钮
         self.btn_sys_out = tk.Button(self.root, text="Exit", command=self.sys_out)
         self.btn_sys_out.place(relx=0.70, rely=0.88, relwidth=0.28, relheight=0.07)
@@ -278,12 +283,18 @@ class ScreenCapture(object):
         
     def determine_save_path(self):
         self.save_path = filedialog.askdirectory() # 打开文件夹对话框
+        if self.save_path == "":
+            return
         self.text_info.insert("end", f"{self.time_str}:\n   Image save path: {self.save_path}\n")
         self.label_save_path.delete("1.0", "end")
         self.label_save_path.insert("end", self.save_path)
+        self.btn_save_path_open['state'] = 'normal'
         if self.capture_window != None and self.save_path != None:
             self.btn_start['state'] = 'normal'
-        
+    
+    def open_save_path(self):
+        if self.save_path != None:
+            os.startfile(self.save_path)
 
     @property
     def time_str(self):
