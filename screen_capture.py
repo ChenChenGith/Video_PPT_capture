@@ -101,77 +101,202 @@ def get_resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
+def find_stereo_mix_device(mic):
+    keyword_list = ["stereo mix", "立体声混音"]
+    for i in range(mic.get_device_count()):
+        info = mic.get_device_info_by_index(i)
+        name = info.get('name', '').lower()
+        if info.get('maxInputChannels', 0) > 0:
+            for kw in keyword_list:
+                if kw in name:
+                    return i
+    return None
+
 class ScreenCapture(object):
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("PPT in Video Capture Tool. CC:ChenChenGith@github")
-        self.win_width, self.win_height = int(min(self.root.winfo_screenwidth()/4, 500)), int(min(self.root.winfo_screenheight(), 500))
+        self.win_width, self.win_height = int(min(self.root.winfo_screenwidth()/1.8, 900)), int(min(self.root.winfo_screenheight(), 700))
         self.root.geometry("{0}x{1}+0+0".format(self.win_width, self.win_height))
-        
         self.root.iconbitmap(get_resource_path("./ycy.ico"))
 
-        # 文本信息框
-        self.text_info = tk.Text(self.root)
-        self.text_info.place(relx=0.05, rely=0.05, relwidth=0.63, relheight=0.9) 
-        # 指定截图检查间隔时间（秒）
-        tk.Label(self.root, text="Check Interval (s)").place(relx=0.70, rely=0.05, relwidth=0.28, relheight=0.04)
-        self.ety_capture_interval = tk.Entry(self.root, justify="center")
+        # 主frame，分为左侧信息区和右侧设置区
+        self.main_frame = tk.Frame(self.root)
+        self.main_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        # 左侧信息区
+        self.left_frame = tk.Frame(self.main_frame)
+        self.left_frame.place(relx=0.02, rely=0.03, relwidth=0.7, relheight=0.94)
+        # 上：截图信息
+        tk.Label(self.left_frame, text="Screen Capture Info", anchor="w", font=("Arial", 11, "bold")).pack(fill="x")
+        self.text_info = tk.Text(self.left_frame, height=18)
+        self.text_info.pack(fill="x", expand=False)
+        # 中：语音识别信息
+        tk.Label(self.left_frame, text="Speech Recognition Info", anchor="w", font=("Arial", 11, "bold")).pack(fill="x", pady=(10,0))
+        self.text_asr = tk.Text(self.left_frame, height=18)
+        self.text_asr.pack(fill="both", expand=True)
+        # 下：系统日志信息
+        tk.Label(self.left_frame, text="System Log Info", anchor="w", font=("Arial", 11, "bold")).pack(fill="x", pady=(10,0))
+        self.text_log = tk.Text(self.left_frame, height=8)
+        self.text_log.pack(fill="both", expand=True)
+
+
+        # 右侧设置区
+        self.right_frame = tk.Frame(self.main_frame)
+        self.right_frame.place(relx=0.74, rely=0.03, relwidth=0.24, relheight=0.94)
+
+        # 上：截图设置
+        self.frame_cap = tk.LabelFrame(self.right_frame, text="Screen Capture Settings", font=("Arial", 10, "bold"))
+        self.frame_cap.pack(fill="x", padx=2, pady=2)
+        tk.Label(self.frame_cap, text="Check Interval (s)").grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+        self.ety_capture_interval = tk.Entry(self.frame_cap, justify="center", width=6)
         self.ety_capture_interval.insert(0, "5")
-        self.ety_capture_interval.place(relx=0.78, rely=0.09, relwidth=0.1, relheight=0.05)
-        # 敏感度选择滑动条
-        self.scb_sensitivity = tk.Scale(self.root, from_=0, to=20, orient="horizontal", label="Sensitivity (0=High)", resolution=1, length=50)
-        self.scb_sensitivity.place(relx=0.70, rely=0.14, relwidth=0.28, relheight=0.13)
+        self.ety_capture_interval.grid(row=0, column=1, sticky="ew", padx=2, pady=2)
+        self.scb_sensitivity = tk.Scale(self.frame_cap, from_=0, to=20, orient="horizontal", label="Sensitivity (0=High)", resolution=1, length=100)
         self.scb_sensitivity.set(2)
-        # 指定截图区域按钮
-        self.btn_window_config = tk.Button(self.root, text="Capt. Win. Selection", command=self.get_capture_window)
-        self.btn_window_config.place(relx=0.70, rely=0.28, relwidth=0.28, relheight=0.08)
-        # 当前截图区域
-        tk.Label(self.root, text="Capt. Win. Info:", fg='gray').place(relx=0.70, rely=0.36, relwidth=0.28, relheight=0.05)
-        self.label_capture_window = tk.Label(self.root, text="None", fg="gray")
-        self.label_capture_window.place(relx=0.70, rely=0.41, relwidth=0.28, relheight=0.08)
+        self.scb_sensitivity.grid(row=1, column=0, columnspan=2, sticky="ew", padx=2, pady=2)
+        self.btn_window_config = tk.Button(self.frame_cap, text="Capture Window Selection", command=self.get_capture_window)
+        self.btn_window_config.grid(row=2, column=0, columnspan=2, sticky="ew", padx=2, pady=2)
+        tk.Label(self.frame_cap, text="Capt. Win. Info:", fg='gray').grid(row=3, column=0, sticky="ew", padx=2, pady=2)
+        self.label_capture_window = tk.Label(self.frame_cap, text="None", fg="gray")
+        self.label_capture_window.grid(row=3, column=1, sticky="ew", padx=2, pady=2)
+        self.btn_start = tk.Button(self.frame_cap, text="Start Capture", command=self.start_capture, state="disabled")
+        self.btn_start.grid(row=6, column=0, sticky="ew", padx=2, pady=2)
+        self.btn_stop = tk.Button(self.frame_cap, text="Stop Capture", command=self.stop_capture, state="disabled")
+        self.btn_stop.grid(row=6, column=1, sticky="ew", padx=2, pady=2)
+        self.frame_cap.columnconfigure(0, weight=1)
+        self.frame_cap.columnconfigure(1, weight=1)
 
-        # 指定文件保存路径按钮
-        self.btn_save_path = tk.Button(self.root, text="Img. Path Selection", command=self.determine_save_path)
-        self.btn_save_path.place(relx=0.70, rely=0.49, relwidth=0.28, relheight=0.1)
-        # # 当前文件保存路径
-        tk.Label(self.root, text="Img. Save Path", fg='gray').place(relx=0.72, rely=0.59, relwidth=0.28, relheight=0.05)
-        self.label_save_path = tk.Text(self.root, fg="gray", bd=0)
-        self.label_save_path.insert("end", "None")
-        self.label_save_path.place(relx=0.70, rely=0.64, relwidth=0.15, relheight=0.1)
+        # 下：语音识别设置
+        self.frame_asr = tk.LabelFrame(self.right_frame, text="Speech Recognition Settings", font=("Arial", 10, "bold"))
+        self.frame_asr.pack(fill="x", padx=2, pady=(10,2))
+        tk.Label(self.frame_asr, text="API Key").grid(row=0, column=0, sticky="ew", padx=2, pady=2)
+        self.ety_api_key = tk.Entry(self.frame_asr, show="*", width=18)
+        self.ety_api_key.grid(row=0, column=1, sticky="ew", padx=2, pady=2)
+        self.btn_asr_start = tk.Button(self.frame_asr, text="Start SRS", command=self.start_asr, state="normal")
+        self.btn_asr_start.grid(row=1, column=0, sticky="ew", padx=2, pady=2)
+        self.btn_asr_stop = tk.Button(self.frame_asr, text="Stop SRS", command=self.stop_asr, state="disabled")
+        self.btn_asr_stop.grid(row=1, column=1, sticky="ew", padx=2, pady=2)
+        self.frame_asr.columnconfigure(0, weight=1)
+        self.frame_asr.columnconfigure(1, weight=1)
 
-        self.btn_save_path_open = tk.Button(self.root, text="Open\nFold", command=self.open_save_path, state="disabled")
-        self.btn_save_path_open.place(relx=0.86, rely=0.64, relwidth=0.12, relheight=0.1)
 
+        # 控制面板：一键启动/停止
+        self.frame_ctrl = tk.LabelFrame(self.right_frame, text="Control Panel", font=("Arial", 10, "bold"))
+        self.frame_ctrl.pack(fill="x", padx=2, pady=(10,2))
+        self.btn_all_start = tk.Button(self.frame_ctrl, text="Start All", command=self.start_all, state="normal")
+        self.btn_all_start.grid(row=0, column=0, padx=2, pady=2, sticky="ew")
+        self.btn_all_stop = tk.Button(self.frame_ctrl, text="Stop All", command=self.stop_all, state="disabled")
+        self.btn_all_stop.grid(row=0, column=1, padx=2, pady=2, sticky="ew")
+        self.frame_ctrl.columnconfigure(0, weight=1)
+        self.frame_ctrl.columnconfigure(1, weight=1)
 
-        # 开始截图按钮
-        self.btn_start = tk.Button(self.root, text="Start", command=self.start_capture, state="disabled")
-        self.btn_start.place(relx=0.70, rely=0.76, relwidth=0.12, relheight=0.1)
-        # 停止截图按钮
-        self.btn_stop = tk.Button(self.root, text="Stop", command=self.stop_capture, state="disabled")
-        self.btn_stop.place(relx=0.86, rely=0.76, relwidth=0.12, relheight=0.1)
+        # 日志保存路径
+        self.frame_save_path = tk.LabelFrame(self.right_frame, text="Log Save Path", font=("Arial", 10, "bold"))
+        self.frame_save_path.pack(fill="x", padx=2, pady=(10,2))
+        # 两行布局：第一行为标签和路径，第二行为按钮
+        tk.Label(self.frame_save_path, text=f"Last\nSaved", fg='gray').grid(row=0, column=0, sticky="w", padx=2, pady=2)
+        self.label_save_path = tk.Label(self.frame_save_path, fg="gray", bd=0, text="None", anchor="w", wraplength=120)
+        self.label_save_path.grid(row=0, column=1, columnspan=2, sticky="ew", padx=2, pady=2)
+        self.btn_save_path_open = tk.Button(self.frame_save_path, text="Open Folder", command=self.open_save_path, state="normal")
+        self.btn_save_path_open.grid(row=1, column=0, columnspan=3, sticky="ew", padx=3, pady=2)
+        self.frame_save_path.columnconfigure(1, weight=1)
+        self.frame_save_path.columnconfigure(2, weight=0)
+
         # 退出按钮
-        self.btn_sys_out = tk.Button(self.root, text="Exit", command=self.sys_out)
-        self.btn_sys_out.place(relx=0.70, rely=0.88, relwidth=0.28, relheight=0.07)
-        
+        self.btn_sys_out = tk.Button(self.right_frame, text="Exit", command=self.sys_out)
+        self.btn_sys_out.pack(side="bottom", fill="x", padx=2, pady=8)
+
         # 是否显示浮动窗口复选框
         self.is_show_state_window_var = tk.BooleanVar()
-        self.is_show_state_window = tk.Checkbutton(self.root, text="Show State Window", command=self.show_state_window, variable=self.is_show_state_window_var)
+        self.is_show_state_window = tk.Checkbutton(self.right_frame, text="Show State Window", command=self.show_state_window, variable=self.is_show_state_window_var)
         self.is_show_state_window.select()
-        self.is_show_state_window.place(relx=0.05, rely=0.95, relwidth=0.3, relheight=0.05)
-        
+        self.is_show_state_window.pack(side="bottom", fill="x", padx=2, pady=2)
 
-        
         self.sensitivity = None
         self.is_capturing = False
+        self.is_speech_recognizing = False
         self.capture_window = None
-        self.save_path = None
+        self.save_path = None  # 保留但不再使用
         self.im = None
-
         self.mouse_x, self.mouse_y = 0, 0
 
         self.__init_state_window()
-
         self.root.mainloop()
+        
+    def start_all(self):
+        # 启动截图和语音识别（仅UI按钮状态切换，功能后续实现）
+        if self.capture_window is None:
+            self.text_log.insert("end", f"{self.time_str}: Please select capture window first!\n")
+            self.text_log.see("end")
+            return
+        if self.btn_start['state'] == 'normal':
+            self.start_capture()
+        if self.btn_asr_start['state'] == 'normal':
+            self.start_asr()
+        self.btn_all_start['state'] = 'disabled'
+        self.btn_all_stop['state'] = 'normal'
+
+    def stop_all(self):
+        # 停止截图和语音识别（仅UI按钮状态切换，功能后续实现）
+        if self.btn_stop['state'] == 'normal':
+            self.stop_capture()
+        if self.btn_asr_stop['state'] == 'normal':
+            self.stop_asr()
+        self.btn_all_start['state'] = 'normal'
+        self.btn_all_stop['state'] = 'disabled'
+   
+    def select_log_path(self):
+        path = filedialog.askdirectory()
+        if path:
+            self.ety_log_path.delete(0, "end")
+            self.ety_log_path.insert(0, path)
+
+    def _init_auto_save_dir(self):
+        import os, datetime
+        now = datetime.datetime.now()
+        folder = now.strftime("%Y%m%d_%H%M%S")
+        base = os.path.dirname(sys.argv[0])
+        save_dir = os.path.join(base, folder)
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        self.save_path = save_dir
+        self.label_save_path['text'] = self.save_path
+        self.text_log.insert("end", f"{self.time_str}: Log and images will be saved to {self.save_path}\n")
+        self.text_log.see("end")
+
+    def start_asr(self):
+        import threading
+        self.btn_asr_start['state'] = 'disabled'
+        self.btn_asr_stop['state'] = 'normal'
+        self.text_asr.insert("end", f"{self.time_str}: Speech recognition started.\n")
+        self.text_asr.see("end")
+        self.is_speech_recognizing = True
+
+        if not self.is_capturing:
+            self._init_auto_save_dir()
+
+        if self.is_capturing:
+            self.btn_all_start['state'] = 'disabled'
+            self.btn_all_stop['state'] = 'normal'
+
+        # self.asr_thread = threading.Thread(target=self._run_asr, daemon=True)
+        # self.asr_thread.start()
+
+    def stop_asr(self):
+        self.is_speech_recognizing = False
+        self.btn_asr_start['state'] = 'normal'
+        self.btn_asr_stop['state'] = 'disabled'
+
+        if not self.is_capturing:
+            self.btn_all_start['state'] = 'normal'
+            self.btn_all_stop['state'] = 'disabled'
+        
+        self.text_asr.insert("end", f"{self.time_str}: Speech recognition stopped.\n")
+        self.text_asr.see("end")
+
+    def _run_asr(self):
+        ...
         
     def show_state_window(self):
         if self.is_show_state_window_var.get():
@@ -222,8 +347,8 @@ class ScreenCapture(object):
         self.capture_window = cws.get_capture_window_coor()
         # 显示截图区域信息到文本框, 包含时间
         self.text_info.insert("end", f"{self.time_str}:\n   Capture window:{self.capture_window}\n")
-        self.label_capture_window['text'] = f"({self.capture_window[0]},{self.capture_window[1]})\n({self.capture_window[2]},{self.capture_window[3]})"
-        if self.capture_window != None and self.save_path != None:
+        self.label_capture_window['text'] = f"({self.capture_window[0]},{self.capture_window[1]})->({self.capture_window[2]},{self.capture_window[3]})"
+        if self.capture_window is not None:
             self.btn_start['state'] = 'normal'
 
     def capture(self):
@@ -235,9 +360,11 @@ class ScreenCapture(object):
         diff = ImageChops.difference(self.im, im2)
         diff = sum(ImageStat.Stat(diff).mean)
         # diff = np.mean((np.array(self.im) - np.array(im2))**2) / (self.im_l * self.im_w)
-        if  diff> self.sensitivity:
-            if self.is_capturing: 
-                im2.save(rf'{self.save_path}\{self.time_str}.png')
+        if  diff > self.sensitivity:
+            if self.is_capturing:
+                import os
+                img_path = os.path.join(self.save_path, f'{self.time_str}.png')
+                im2.save(img_path)
                 self.text_info.insert("end", f"\n{self.time_str}:\n   diff={diff:.1f}, PPT slide change detected!\n")
                 self.text_info.see("end")
                 self.update_capture_state('on')
@@ -258,12 +385,19 @@ class ScreenCapture(object):
         self.text_info.insert("end", f"\n{self.time_str}:\n   Capture started!\n")
         self.text_info.insert("end", f"   Check interval={self.capture_interval}s, sensitivity={self.sensitivity}\n")
         self.btn_start['state'] = 'disabled'
-        self.btn_stop['state'] = 'normal'        
+        self.btn_stop['state'] = 'normal'
+
+        if not self.is_speech_recognizing:
+            self._init_auto_save_dir()
 
         self.im = ImageGrab.grab(bbox=self.capture_window, include_layered_windows=False, all_screens=True)
         self.im.save(rf'{self.save_path}\{self.time_str}.png')
         self.im_l, self.im_w = self.im.size
         self.im_l, self.im_w = self.im_l/1000, self.im_w/1000
+
+        if self.is_speech_recognizing:
+            self.btn_all_start['state'] = 'disabled'
+            self.btn_all_stop['state'] = 'normal'
 
         self.capture()
 
@@ -273,28 +407,25 @@ class ScreenCapture(object):
         self.btn_stop['state'] = 'disabled'
         self.is_capturing = False
 
+        if not self.is_speech_recognizing:
+            self.btn_all_start['state'] = 'normal'
+            self.btn_all_stop['state'] = 'disabled'
+
         self.label_monitoring_state["bg"] = "orange"
         self.label_capture_state["bg"] = "orange"
 
     def sys_out(self):
         self.is_capturing = False
+        self.is_speech_recognizing = False
         self.root.destroy()
         self.root.quit()
         
-    def determine_save_path(self):
-        self.save_path = filedialog.askdirectory() # 打开文件夹对话框
-        if self.save_path == "":
-            return
-        self.text_info.insert("end", f"{self.time_str}:\n   Image save path: {self.save_path}\n")
-        self.label_save_path.delete("1.0", "end")
-        self.label_save_path.insert("end", self.save_path)
-        self.btn_save_path_open['state'] = 'normal'
-        if self.capture_window != None and self.save_path != None:
-            self.btn_start['state'] = 'normal'
-    
     def open_save_path(self):
-        if self.save_path != None:
+        if self.save_path and os.path.exists(self.save_path):
             os.startfile(self.save_path)
+        else:
+            self.text_log.insert("end", f"{self.time_str}: No valid save path!\n")
+            self.text_log.see("end")
 
     @property
     def time_str(self):
