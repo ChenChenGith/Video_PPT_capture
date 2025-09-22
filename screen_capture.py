@@ -9,6 +9,11 @@ import tkinter as tk
 from tkinter import filedialog
 import sys, os
 from screeninfo import get_monitors
+import threading
+
+from dashscope.audio.asr import RecognitionCallback, RecognitionResult, Recognition
+import dashscope
+import pyaudio
 
 def get_all_display_info():
     x, y = [], []
@@ -19,6 +24,17 @@ def get_all_display_info():
         y.append(m.y + m.height)
     
     return max(x) - min(x), max(y) - min(y), min(x), min(y)
+
+def find_stereo_mix_device(mic):
+    keyword_list = ["stereo mix", "立体声混音"]
+    for i in range(mic.get_device_count()):
+        info = mic.get_device_info_by_index(i)
+        name = info.get('name', '').lower()
+        if info.get('maxInputChannels', 0) > 0:
+            for kw in keyword_list:
+                if kw in name:
+                    return i
+    return None
 
 class Capture_window_select(object):
     def __init__(self, capture_window=None):
@@ -101,16 +117,79 @@ def get_resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
-def find_stereo_mix_device(mic):
-    keyword_list = ["stereo mix", "立体声混音"]
-    for i in range(mic.get_device_count()):
-        info = mic.get_device_info_by_index(i)
-        name = info.get('name', '').lower()
-        if info.get('maxInputChannels', 0) > 0:
-            for kw in keyword_list:
-                if kw in name:
-                    return i
-    return None
+# Real-time speech recognition callback
+class Callback(RecognitionCallback):
+    def __init__(self, log_file=None, text_asr: tk.Text=None, voice_source="stereo mix"):
+        super().__init__()
+        self.log_file = log_file
+        self.text_asr = text_asr
+        self.mic = None
+        self.stream = None
+        self.voice_source = voice_source
+
+    def on_open(self) -> None:
+        self.text_asr.insert("end", f"{self.time_str}: Speech recognition started, using {self.voice_source}.\n")
+        self.text_asr.see("end")
+        self.mic = pyaudio.PyAudio()
+        if self.voice_source == "stereo mix":
+            stereo_mix_index = find_stereo_mix_device(self.mic)
+            if stereo_mix_index is not None:
+                self.text_asr.insert("end", f"{self.time_str}: Using 'Stereo Mix' device (index={stereo_mix_index}) as audio source.\n")
+                self.text_asr.see("end")
+                self.stream = self.mic.open(format=pyaudio.paInt16,
+                                            channels=1,
+                                            rate=16000,
+                                            input=True,
+                                            input_device_index=stereo_mix_index)
+            else:
+                self.text_asr.insert("end", f"{self.time_str}: Failed to open stereo mix audio input device, cannot listen system output\n")
+                self.text_asr.see("end")
+                self.stream = None
+
+        elif self.voice_source == "mic":
+            self.text_asr.insert("end", f"{self.time_str}: Using default microphone as audio source.\n")
+            self.text_asr.see("end")
+            self.stream = self.mic.open(format=pyaudio.paInt16,
+                                        channels=1,
+                                        rate=16000,
+                                        input=True)
+
+    def on_close(self) -> None:
+        self.text_asr.insert("end", f"{self.time_str}: Speech recognition from source {self.voice_source} stopped.\n")
+        self.text_asr.see("end")
+        self.stream.stop_stream()
+        self.stream.close()
+        self.mic.terminate()
+        self.stream = None
+        self.mic = None
+
+    def on_complete(self) -> None:
+        self.text_asr.insert("end", f"\n{self.time_str}: RecognitionCallback completed.\n")
+        self.text_asr.see("end")
+
+    def on_error(self, message) -> None:
+        self.text_asr.insert("end", f"{self.time_str}: RecognitionCallback error: {message.message}\n")
+        self.text_asr.see("end")
+        # Stop and close the audio stream if it is running
+        if self.stream.active:
+            self.stream.stop()
+            self.stream.close()
+
+    def on_event(self, result: RecognitionResult) -> None:
+        sentence = result.get_sentence()
+        # 只在句子结束时输出和累加，避免重复
+        if RecognitionResult.is_sentence_end(sentence) and 'text' in sentence:
+            self.text_asr.insert("end", f"{self.time_str}: RecognitionCallback text: {sentence['text']}\n")
+            self.text_asr.see("end")
+            # 实时写入日志文件
+            if self.log_file:
+                with open(self.log_file, 'a', encoding='utf-8') as f:
+                    f.write(sentence['text'] + '\n')
+
+    @property
+    def time_str(self):
+        return time.strftime("%Y%m%d-%H%M%S", time.localtime())
+
 
 class ScreenCapture(object):
     def __init__(self):
@@ -266,11 +345,8 @@ class ScreenCapture(object):
         self.text_log.see("end")
 
     def start_asr(self):
-        import threading
         self.btn_asr_start['state'] = 'disabled'
         self.btn_asr_stop['state'] = 'normal'
-        self.text_asr.insert("end", f"{self.time_str}: Speech recognition started.\n")
-        self.text_asr.see("end")
         self.is_speech_recognizing = True
 
         if not self.is_capturing:
@@ -280,8 +356,13 @@ class ScreenCapture(object):
             self.btn_all_start['state'] = 'disabled'
             self.btn_all_stop['state'] = 'normal'
 
-        # self.asr_thread = threading.Thread(target=self._run_asr, daemon=True)
+        # 启动语音识别线程，避免阻塞主线程
+        # # 监听麦克风
+        # self.asr_thread = threading.Thread(target=self._run_asr, daemon=True, args=("mic",))
         # self.asr_thread.start()
+        # 监听立体声混音
+        self.asr_thread_stereo = threading.Thread(target=self._run_asr, daemon=True, args=("stereo mix",))
+        self.asr_thread_stereo.start()
 
     def stop_asr(self):
         self.is_speech_recognizing = False
@@ -295,8 +376,28 @@ class ScreenCapture(object):
         self.text_asr.insert("end", f"{self.time_str}: Speech recognition stopped.\n")
         self.text_asr.see("end")
 
-    def _run_asr(self):
-        ...
+    def _run_asr(self, source="stereo mix"):
+        dashscope.api_key = 'sk-e7f91f9d08fd47158ec36ed4636d23f4'
+        # dashscope.api_key = self.ety_api_key.get().strip()
+        log_filename = os.path.join(self.save_path, f"asr_log_{self.time_str}.txt")
+        callback = Callback(log_file=log_filename, text_asr=self.text_asr, voice_source=source)
+        sample_rate = 16000  # 采样率
+        format_pcm = 'pcm'  # 音频数据格式
+        block_size = 3200  # 每次读取的帧数
+        recognition = Recognition(
+                    model='paraformer-realtime-v2',
+                    format=format_pcm,
+                    sample_rate=sample_rate,
+                    semantic_punctuation_enabled=False,
+                    callback=callback)
+        recognition.start()
+        while True:
+            if callback.stream:
+                data = callback.stream.read(block_size, exception_on_overflow=False)
+                recognition.send_audio_frame(data)
+            else:
+                break
+        recognition.stop()
         
     def show_state_window(self):
         if self.is_show_state_window_var.get():
