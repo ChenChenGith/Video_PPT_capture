@@ -28,6 +28,10 @@ New users are entitled to a free trial of 10 hours. If you choose the paid versi
 
 Once an API key has been entered, it will be automatically saved in a text file in the root directory of the program and will be automatically loaded when the program is opened again.
 
+# Important
+
+The computer will not enter sleep mode or turn off the screen during screen and audio monitoring.
+
 
 # 功能状态的浮动窗口
 第一行显示截图功能的状态：
@@ -53,3 +57,7 @@ Once an API key has been entered, it will be automatically saved in a text file 
 新用户享有10小时的免费试用。若选择付费版本，价格仅为每小时0.86人民币（0.12美元）！
 
 一旦输入了API密钥，它将自动保存在程序根目录下的一个文本文件中，并在下次打开程序时自动加载。
+
+# 重要
+
+在进行屏幕和语音监测期间，电脑将不会进入睡眠和关闭屏幕。

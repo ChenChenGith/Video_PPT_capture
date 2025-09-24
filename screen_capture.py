@@ -16,7 +16,7 @@ import dashscope
 import pyaudio
 
 import webbrowser
-
+import ctypes
 
 def get_all_display_info():
     x, y = [], []
@@ -224,6 +224,23 @@ def run_asr_process(log_filename, text_queue, apikey, stereo_mix_index, source="
             break
     recognition.stop()
 
+def set_system_sleep_state(state: bool, text_log: tk.Text):
+    if state:
+        # 设置系统不休眠
+        try:
+            ctypes.windll.kernel32.SetThreadExecutionState(0x80000002)
+            text_log.insert(tk.END, "System sleep state set to: Not Sleep\n")
+            return True
+        except Exception as e:
+            return False
+    else:
+        # 恢复系统休眠设置
+        try:
+            ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
+            text_log.insert(tk.END, "System sleep state set to: Sleep\n")
+            return True
+        except Exception as e:
+            return False
 
 class ScreenCapture(object):
     def __init__(self):
@@ -347,6 +364,7 @@ class ScreenCapture(object):
         self.is_capturing = False
         self.is_speech_recognizing = False
         self.is_asr_queue_checking = False
+        self.is_setting_sys_not_sleep = False
         self.apikey = None
         self.capture_window = None
         self.save_path = None  
@@ -367,7 +385,7 @@ class ScreenCapture(object):
         self.text_log.see("end")
 
     def start_all(self):
-        # 启动截图和语音识别（仅UI按钮状态切换，功能后续实现）
+        # 启动截图和语音识别
         do_not_prapare = False
         if self.capture_window is None:
             self._text_log_show(f"{self.time_str}: Please select capture window first!\n", "red")
@@ -384,6 +402,9 @@ class ScreenCapture(object):
         self.btn_all_start['state'] = 'disabled'
         self.btn_all_stop['state'] = 'normal'
 
+        if not self.is_setting_sys_not_sleep:
+            self.is_setting_sys_not_sleep = set_system_sleep_state(True, self.text_log)
+
     def stop_all(self):
         # 停止截图和语音识别（仅UI按钮状态切换，功能后续实现）
         if self.btn_stop['state'] == 'normal':
@@ -392,6 +413,9 @@ class ScreenCapture(object):
             self.stop_asr()
         self.btn_all_start['state'] = 'normal'
         self.btn_all_stop['state'] = 'disabled'
+
+        if self.is_setting_sys_not_sleep:
+            self.is_setting_sys_not_sleep = set_system_sleep_state(False, self.text_log)
    
     def select_log_path(self):
         path = filedialog.askdirectory()
@@ -418,7 +442,7 @@ class ScreenCapture(object):
         mic = pyaudio.PyAudio()
         self.stereo_mix_index = find_stereo_mix_device(mic)
         if self.stereo_mix_index is None:
-            self._text_log_show(f"{self.time_str}: Stereo Mix not found! Please activate the stereo mix device. See help documentation for more details.\n", "red")
+            self._text_log_show(f"{self.time_str}: Stereo Mix not found! Please activate the stereo mix device if you want to listen system output. See help documentation for more details.\n", "red")
         else:
             self._text_log_show(f"{self.time_str}: Can use 'Stereo Mix' device (index={self.stereo_mix_index}) as audio source.\n", "green")
 
@@ -447,7 +471,8 @@ class ScreenCapture(object):
         return True
 
     def start_asr(self):
-        self._check_has_input_api()
+        if not self._check_has_input_api():
+            return
             
         self.btn_asr_start['state'] = 'disabled'
         self.btn_asr_stop['state'] = 'normal'
@@ -462,24 +487,35 @@ class ScreenCapture(object):
 
         log_filename = os.path.join(self.save_path, f"asr_log_{time.strftime('%Y%m%d-%H%M%S', time.localtime())}.txt")
         
-        self.asr_proc_mic = multiprocessing.Process(target=run_asr_process, args=(log_filename, self.asr_queue, self.apikey, self.stereo_mix_index, "mic"))
-        self.asr_proc_stereo = multiprocessing.Process(target=run_asr_process, args=(log_filename, self.asr_queue, self.apikey, self.stereo_mix_index, "stereo mix"))
-        self.asr_proc_mic.daemon = True
-        self.asr_proc_stereo.daemon = True
-
-        self.asr_proc_mic.start()
-        self.asr_proc_stereo.start()
+        if self.use_microphone.get():
+            self.asr_proc_mic = multiprocessing.Process(target=run_asr_process, args=(log_filename, self.asr_queue, self.apikey, self.stereo_mix_index, "mic"))
+            self.asr_proc_mic.daemon = True
+            self.update_mic_state('on')
+            self.asr_proc_mic.start()
+        if self.use_stereo_mix.get():
+            self.asr_proc_stereo = multiprocessing.Process(target=run_asr_process, args=(log_filename, self.asr_queue, self.apikey, self.stereo_mix_index, "stereo mix"))
+            self.asr_proc_stereo.daemon = True
+            self.update_stereo_mix_state('on')
+            self.asr_proc_stereo.start()
+        
+        self.check_microphone['state'] = 'disabled'
+        self.check_stereo_mix['state'] = 'disabled'
         
         self.is_asr_queue_checking = True
         self.poll_asr_queues()
 
-        self.update_mic_state('on')
-        self.update_stereo_mix_state('on')
-        
+        if self.is_setting_sys_not_sleep:
+            self.is_setting_sys_not_sleep = set_system_sleep_state(True, self.text_log)
+
     def stop_asr(self):
         self.is_speech_recognizing = False
+        self.is_asr_queue_checking = True
+
         self.btn_asr_start['state'] = 'normal'
         self.btn_asr_stop['state'] = 'disabled'
+
+        self.check_microphone['state'] = 'normal'
+        self.check_stereo_mix['state'] = 'normal'
 
         if not self.is_capturing:
             self.btn_all_start['state'] = 'normal'
@@ -489,15 +525,18 @@ class ScreenCapture(object):
         if hasattr(self, 'asr_proc_mic') and self.asr_proc_mic.is_alive():
             self.asr_proc_mic.terminate()
             self.asr_proc_mic.join()
+            self.update_mic_state('off')
         if hasattr(self, 'asr_proc_stereo') and self.asr_proc_stereo.is_alive():
             self.asr_proc_stereo.terminate()
             self.asr_proc_stereo.join()
+            self.update_stereo_mix_state('off')
         
-        self.update_mic_state('off')
-        self.update_stereo_mix_state('off')
 
         self.text_asr.insert("end", f"{self.time_str}: Speech recognition stopped.\n")
         self.text_asr.see("end")
+
+        if self.is_setting_sys_not_sleep:
+            self.is_setting_sys_not_sleep = set_system_sleep_state(False, self.text_log)
 
     def poll_asr_queues(self):
         if not self.is_asr_queue_checking:
@@ -615,6 +654,7 @@ class ScreenCapture(object):
         self.text_info.insert("end", f"   Check interval={self.capture_interval}s, sensitivity={self.sensitivity}\n")
         self.btn_start['state'] = 'disabled'
         self.btn_stop['state'] = 'normal'
+        self.btn_window_config['state'] = 'disabled'
 
         if not self.is_speech_recognizing:
             self._init_auto_save_dir()
@@ -627,6 +667,9 @@ class ScreenCapture(object):
         if self.is_speech_recognizing:
             self.btn_all_start['state'] = 'disabled'
             self.btn_all_stop['state'] = 'normal'
+
+        if not self.is_setting_sys_not_sleep:
+            self.is_setting_sys_not_sleep = set_system_sleep_state(True, self.text_log)
 
         self.update_monitoring_state('on')
         self.capture()
@@ -644,17 +687,18 @@ class ScreenCapture(object):
         self.label_monitoring_state["bg"] = "orange"
         self.label_capture_state["bg"] = "orange"
 
+        if self.is_setting_sys_not_sleep:
+            self.is_setting_sys_not_sleep = set_system_sleep_state(False, self.text_log)
+
         self.update_monitoring_state('off')
 
     def sys_out(self):
-        self.stop_asr()
-        self.stop_capture()
+        self.stop_all()
         self.root.destroy()
         self.root.quit()
 
     def on_close(self):        
-        self.stop_asr()
-        self.stop_capture()
+        self.stop_all()
         self.root.destroy()
         self.root.quit()
 
