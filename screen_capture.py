@@ -238,9 +238,9 @@ def set_system_sleep_state(state: bool, text_log: tk.Text):
         try:
             ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
             text_log.insert(tk.END, "System sleep state set to: Sleep\n")
-            return True
-        except Exception as e:
             return False
+        except Exception as e:
+            return True
 
 class ScreenCapture(object):
     def __init__(self):
@@ -346,6 +346,9 @@ class ScreenCapture(object):
         # add a help button
         self.btn_help = tk.Button(self.right_frame, text="Help", command=self.show_help)
         self.btn_help.pack(fill="x", padx=2, pady=25)
+
+        btn_github = tk.Button(self.right_frame, text="Visit GitHub", command=self.open_github, bg="black", fg="white")
+        btn_github.pack(padx=2, pady=5)
 
         # 退出按钮
         self.btn_sys_out = tk.Button(self.right_frame, text="Exit", command=self.sys_out)
@@ -504,7 +507,7 @@ class ScreenCapture(object):
         self.is_asr_queue_checking = True
         self.poll_asr_queues()
 
-        if self.is_setting_sys_not_sleep:
+        if not self.is_setting_sys_not_sleep:
             self.is_setting_sys_not_sleep = set_system_sleep_state(True, self.text_log)
 
     def stop_asr(self):
@@ -515,7 +518,8 @@ class ScreenCapture(object):
         self.btn_asr_stop['state'] = 'disabled'
 
         self.check_microphone['state'] = 'normal'
-        self.check_stereo_mix['state'] = 'normal'
+        if self.stereo_mix_index:
+            self.check_stereo_mix['state'] = 'normal'
 
         if not self.is_capturing:
             self.btn_all_start['state'] = 'normal'
@@ -537,6 +541,7 @@ class ScreenCapture(object):
 
         if self.is_setting_sys_not_sleep:
             self.is_setting_sys_not_sleep = set_system_sleep_state(False, self.text_log)
+        ...
 
     def poll_asr_queues(self):
         if not self.is_asr_queue_checking:
@@ -740,12 +745,12 @@ class ScreenCapture(object):
         text_widget.pack(fill="both", expand=True)
         text_widget.config(state="disabled")
 
-        # 显示一个按钮，点击后连接至项目GitHub页面
-        def open_github():
-            webbrowser.open("https://github.com/ChenChenGith/Video_PPT_capture")
-
-        btn_github = tk.Button(win_md, text="See in GitHub", command=open_github)
+        # 显示一个按钮，点击后连接至项目GitHub页面      
+        btn_github = tk.Button(win_md, text="See in GitHub", command=self.open_github)
         btn_github.pack(pady=10)
+
+    def open_github(self):
+        webbrowser.open("https://github.com/ChenChenGith/Video_PPT_capture")
 
     @property
     def time_str(self):
