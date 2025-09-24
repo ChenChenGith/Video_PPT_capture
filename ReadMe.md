@@ -13,7 +13,7 @@ Requirment:
 
 # Usage:
 
-![alt text](assert/help_image.png)
+![alt text](asset/help_image.png)
 
 ## The float window for function state
 
