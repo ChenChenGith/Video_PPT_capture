@@ -15,6 +15,8 @@ from dashscope.audio.asr import RecognitionCallback, RecognitionResult, Recognit
 import dashscope
 import pyaudio
 
+import webbrowser
+
 
 def get_all_display_info():
     x, y = [], []
@@ -216,7 +218,7 @@ class ScreenCapture(object):
         self.root.title("PESRT (PPT Extractor and Speech Recognition Tool. CC:ChenChenGith@github)")
         self.win_width, self.win_height = int(min(self.root.winfo_screenwidth()/1.8, 900)), int(min(self.root.winfo_screenheight(), 750))
         self.root.geometry("{0}x{1}+0+0".format(self.win_width, self.win_height))
-        self.root.iconbitmap(get_resource_path("assert/ycy.ico"))
+        self.root.iconbitmap(get_resource_path("asset/ycy.ico"))
 
         # 主frame，分为左侧信息区和右侧设置区
         self.main_frame = tk.Frame(self.root)
@@ -577,7 +579,6 @@ class ScreenCapture(object):
         # diff = np.mean((np.array(self.im) - np.array(im2))**2) / (self.im_l * self.im_w)
         if  diff > self.sensitivity:
             if self.is_capturing:
-                import os
                 img_path = os.path.join(self.save_path, f'{self.time_str}.png')
                 im2.save(img_path)
                 self.text_info.insert("end", f"\n{self.time_str}:\n   diff={diff:.1f}, PPT slide change detected!\n")
@@ -653,9 +654,7 @@ class ScreenCapture(object):
 
     def show_help(self):
         # Window 1: show help_image.png
-        import tkinter as tk
-        from PIL import Image, ImageTk
-        help_img_path = get_resource_path("assert/help_image.png")
+        help_img_path = get_resource_path("asset/help_image.png")
         win_img = tk.Toplevel(self.root)
         win_img.title("Help Image")
         try:
@@ -673,7 +672,7 @@ class ScreenCapture(object):
         # Window 2: show Markdown help text
         win_md = tk.Toplevel(self.root)
         win_md.title("Help Text")
-        help_md_path = get_resource_path("assert/help_md.md")
+        help_md_path = get_resource_path("asset/help_md.md")
         try:
             with open(help_md_path, "r", encoding="utf-8") as f:
                 md_text = f.read()
@@ -686,7 +685,6 @@ class ScreenCapture(object):
 
         # 显示一个按钮，点击后连接至项目GitHub页面
         def open_github():
-            import webbrowser
             webbrowser.open("https://github.com/ChenChenGith/Video_PPT_capture")
 
         btn_github = tk.Button(win_md, text="See in GitHub", command=open_github)
