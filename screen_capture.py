@@ -462,6 +462,9 @@ class ScreenCapture(object):
         
         self.is_asr_queue_checking = True
         self.poll_asr_queues()
+
+        self.update_mic_state('on')
+        self.update_stereo_mix_state('on')
         
     def stop_asr(self):
         self.is_speech_recognizing = False
@@ -480,6 +483,9 @@ class ScreenCapture(object):
             self.asr_proc_stereo.terminate()
             self.asr_proc_stereo.join()
         
+        self.update_mic_state('off')
+        self.update_stereo_mix_state('off')
+
         self.text_asr.insert("end", f"{self.time_str}: Speech recognition stopped.\n")
         self.text_asr.see("end")
 
@@ -531,15 +537,30 @@ class ScreenCapture(object):
     def _state_window_on_stop(self, event):
         self.mouse_x, self.mouse_y = 0, 0
 
-    def update_monitoring_state(self):
-        self.label_monitoring_state["bg"] = "red" if self.label_monitoring_state["bg"] == "orange" else "orange"
-
-    def update_capture_state(self, func='on'):
+    def update_monitoring_state(self, func='off'):
+        if func == 'on':
+            self.label_monitoring_state["bg"] = "red"
+        elif func =='off':
+            self.label_monitoring_state["bg"] = "orange"
+            
+    def update_capture_state(self, func='off'):
         if func == 'on':
             self.label_capture_state["bg"] = "red"
         elif func == 'off':
             self.label_capture_state["bg"] = "orange"
-        
+
+    def update_mic_state(self, func='off'):
+        if func == 'on':
+            self.label_mic_listening_state["bg"] = "red"
+        elif func == 'off':
+            self.label_mic_listening_state["bg"] = "orange"
+
+    def update_stereo_mix_state(self, func='off'):
+        if func == 'on':
+            self.label_stereo_mix_listening_state["bg"] = "red"
+        elif func == 'off':
+            self.label_stereo_mix_listening_state["bg"] = "orange"
+
     def get_capture_window(self):
         self.root.iconify() # 最小化窗口
         cws = Capture_window_select(self.capture_window)
@@ -552,7 +573,6 @@ class ScreenCapture(object):
             self.btn_start['state'] = 'normal'
 
     def capture(self):
-        self.update_monitoring_state()
         self.update_capture_state('off')
 
         im2 = ImageGrab.grab(bbox=self.capture_window, include_layered_windows=False, all_screens=True)
@@ -599,6 +619,7 @@ class ScreenCapture(object):
             self.btn_all_start['state'] = 'disabled'
             self.btn_all_stop['state'] = 'normal'
 
+        self.update_monitoring_state('on')
         self.capture()
 
     def stop_capture(self):
@@ -614,33 +635,19 @@ class ScreenCapture(object):
         self.label_monitoring_state["bg"] = "orange"
         self.label_capture_state["bg"] = "orange"
 
+        self.update_monitoring_state('off')
+
     def sys_out(self):
-        # 终止语音识别子进程
-        try:
-            if hasattr(self, "asr_proc_mic") and self.asr_proc_mic.is_alive():
-                self.asr_proc_mic.terminate()
-            if hasattr(self, "asr_proc_stereo") and self.asr_proc_stereo.is_alive():
-                self.asr_proc_stereo.terminate()
-        except Exception as e:
-            print(f"Terminate process error: {e}")
-
-        self.is_capturing = False
-        self.is_speech_recognizing = False
-        self.is_asr_queue_checking = False
-
+        self.stop_asr()
+        self.stop_capture()
         self.root.destroy()
         self.root.quit()
 
-    def on_close(self):
-        # 终止语音识别子进程
-        try:
-            if hasattr(self, "asr_proc_mic") and self.asr_proc_mic.is_alive():
-                self.asr_proc_mic.terminate()
-            if hasattr(self, "asr_proc_stereo") and self.asr_proc_stereo.is_alive():
-                self.asr_proc_stereo.terminate()
-        except Exception as e:
-            print(f"Terminate process error: {e}")
+    def on_close(self):        
+        self.stop_asr()
+        self.stop_capture()
         self.root.destroy()
+        self.root.quit()
 
     def open_save_path(self):
         if self.save_path and os.path.exists(self.save_path):
