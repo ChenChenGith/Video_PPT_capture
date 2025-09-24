@@ -29,6 +29,10 @@ The second line displays the status of the speech recognition function:
 
 ## LLM service for voice recognition
 
+**You need to enable stereo mix on your computer to capture system audio output! Here's how:**
+
+**Settings - System - Sound - All sound devices - Enable Stereo Mix**
+
 This feature uses the real-time speech recognition model provided by Alibaba Cloud: paraformer-realtime-v2, so an API key is required for connection.
 
 Model page: https://bailian.console.aliyun.com/?tab=model#/model-market/detail/paraformer-realtime-v2
@@ -49,6 +53,9 @@ Once an API key has been entered, it will be automatically saved in a text file 
 - 右侧指示灯 Mix 变红，表示当前正在监控立体声混音音频；若 Mix 指示灯为灰色，则表示立体声混音不可用。
 
 ## 语音识别的LLM服务
+
+**需要启动电脑的立体声混音，才能够捕捉系统输出！具体方法：设置-系统-声音-所有声音设备-打开立体声混音**
+
 本功能使用阿里云提供的实时语音识别模型：paraformer-realtime-v2，因此连接时需要API密钥。
 
 模型页面：https://bailian.console.aliyun.com/?tab=model#/model-market/detail/paraformer-realtime-v2
