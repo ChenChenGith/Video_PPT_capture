@@ -667,7 +667,7 @@ class ScreenCapture(object):
 
     def show_help(self):
         # Window 1: show help_image.png
-        help_img_path = get_resource_path("asset/help_image.png")
+        help_img_path = get_resource_ico_path("asset/help_image.png")
         win_img = tk.Toplevel(self.root)
         win_img.title("Help Image")
         try:
@@ -685,7 +685,7 @@ class ScreenCapture(object):
         # Window 2: show Markdown help text
         win_md = tk.Toplevel(self.root)
         win_md.title("Help Text")
-        help_md_path = get_resource_path("asset/help_md.md")
+        help_md_path = get_resource_ico_path("asset/help_md.md")
         try:
             with open(help_md_path, "r", encoding="utf-8") as f:
                 md_text = f.read()
