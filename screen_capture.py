@@ -126,9 +126,22 @@ class Capture_window_select(object):
         ]
 
 def get_resource_path(relative_path):
+    # If running as a PyInstaller exe, use exe directory for resources
+    if hasattr(sys, 'frozen'):
+        # sys.executable is the path to the exe
+        exe_dir = os.path.dirname(sys.executable)
+        return os.path.join(exe_dir, relative_path)
+    elif hasattr(sys, "_MEIPASS"):
+        # For onefile mode, _MEIPASS is the temp dir for bundled resources
+        return os.path.join(sys._MEIPASS, relative_path)
+    else:
+        # For normal script, use current working directory
+        return os.path.join(os.path.abspath("."), relative_path)
+
+def get_resource_ico_path(relative_path):
     if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
+    return os.path.join(os.path.abspath("."), relative_path) 
 
 # Real-time speech recognition callback
 class Callback(RecognitionCallback):
@@ -218,7 +231,7 @@ class ScreenCapture(object):
         self.root.title("PESRT (PPT Extractor and Speech Recognition Tool. CC:ChenChenGith@github)")
         self.win_width, self.win_height = int(min(self.root.winfo_screenwidth()/1.8, 900)), int(min(self.root.winfo_screenheight(), 750))
         self.root.geometry("{0}x{1}+0+0".format(self.win_width, self.win_height))
-        self.root.iconbitmap(get_resource_path("asset/ycy.ico"))
+        self.root.iconbitmap(get_resource_ico_path("asset/ycy.ico"))
 
         # 主frame，分为左侧信息区和右侧设置区
         self.main_frame = tk.Frame(self.root)
@@ -695,4 +708,5 @@ class ScreenCapture(object):
         return time.strftime("%Y%m%d-%H%M%S", time.localtime())
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()  # 兼容 Windows exe
     ScreenCapture()
