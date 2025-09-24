@@ -3,13 +3,12 @@
 # version: 0.1.0
 # license: MIT
 
-from PIL import ImageGrab, ImageChops, ImageStat
+from PIL import ImageGrab, ImageChops, ImageStat, Image, ImageTk
 import time
 import tkinter as tk
 from tkinter import filedialog
 import sys, os
 from screeninfo import get_monitors
-import threading
 import multiprocessing
 
 from dashscope.audio.asr import RecognitionCallback, RecognitionResult, Recognition
@@ -214,10 +213,10 @@ def run_asr_process(log_filename, text_queue, apikey, stereo_mix_index, source="
 class ScreenCapture(object):
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("PPT in Video Capture Tool. CC:ChenChenGith@github")
+        self.root.title("PESRT (PPT Extractor and Speech Recognition Tool. CC:ChenChenGith@github)")
         self.win_width, self.win_height = int(min(self.root.winfo_screenwidth()/1.8, 900)), int(min(self.root.winfo_screenheight(), 750))
         self.root.geometry("{0}x{1}+0+0".format(self.win_width, self.win_height))
-        self.root.iconbitmap(get_resource_path("./ycy.ico"))
+        self.root.iconbitmap(get_resource_path("assert/ycy.ico"))
 
         # 主frame，分为左侧信息区和右侧设置区
         self.main_frame = tk.Frame(self.root)
@@ -343,13 +342,20 @@ class ScreenCapture(object):
 
         self.__init_state_window()
         self.root.mainloop()
-        
+    
+    def _text_log_show(self, msg, color=None):
+        if color:
+            self.text_log.insert("end", msg, color)
+            self.text_log.tag_config(color, foreground=color)
+        else:
+            self.text_log.insert("end", msg)
+        self.text_log.see("end")
+
     def start_all(self):
         # 启动截图和语音识别（仅UI按钮状态切换，功能后续实现）
         do_not_prapare = False
         if self.capture_window is None:
-            self.text_log.insert("end", f"{self.time_str}: Please select capture window first!\n")
-            self.text_log.see("end")
+            self._text_log_show(f"{self.time_str}: Please select capture window first!\n", "red")
             do_not_prapare = True
         if not self._check_has_input_api():
             do_not_prapare = True
@@ -385,8 +391,7 @@ class ScreenCapture(object):
             os.makedirs(save_dir)
         self.save_path = save_dir
         self.label_save_path['text'] = self.save_path
-        self.text_log.insert("end", f"{self.time_str}: Log and images will be saved to {self.save_path}\n")
-        self.text_log.see("end")
+        self._text_log_show(f"{self.time_str}: voice recognition Log and images will be saved to {self.save_path}\n")
 
     def _swtch_btn_asr_start(self):
         if self.use_microphone.get() or self.use_stereo_mix.get():
@@ -398,47 +403,37 @@ class ScreenCapture(object):
         mic = pyaudio.PyAudio()
         self.stereo_mix_index = find_stereo_mix_device(mic)
         if self.stereo_mix_index is None:
-            self.text_log.insert("end", f"{self.time_str}: Stereo Mix not found! Please activate the stereo mix device. See help documentation for more details.\n")
-            self.text_log.see("end")
+            self._text_log_show(f"{self.time_str}: Stereo Mix not found! Please activate the stereo mix device. See help documentation for more details.\n", "red")
         else:
-            self.text_log.insert("end", f"{self.time_str}: Can use 'Stereo Mix' device (index={self.stereo_mix_index}) as audio source.\n")
-            self.text_log.see("end")
+            self._text_log_show(f"{self.time_str}: Can use 'Stereo Mix' device (index={self.stereo_mix_index}) as audio source.\n", "green")
 
     def _check_has_input_api(self):
-        # 检查是否有存储的api key
+        # 检查是否有已有api key
         if self.apikey:
             return True
         if os.path.exists(get_resource_path("api_key.txt")):
             with open(get_resource_path("api_key.txt"), 'r') as f:
                 self.apikey = f.read().strip()
             if self.apikey:
-                self.text_log.insert("end", f"{self.time_str}: Loaded API Key from api_key.txt\n")
-                self.text_log.insert("end", self.apikey)
+                self._text_log_show(f"{self.time_str}: Loaded API Key from api_key.txt\n", "green")
                 self.ety_api_key.delete(0, "end")
                 self.ety_api_key.insert(0, self.apikey)
                 return True
-
+        # 没有apikey也没有之前的存储
         api_key = self.ety_api_key.get().strip()
         if not api_key:
-            self.text_log.insert("end", f"{self.time_str}: Please input API Key for speech recognition!\n")
-            self.text_log.see("end")
+            self._text_log_show(f"{self.time_str}: Please input API Key for speech recognition!\n", "red")
             return False
         else:
             self.apikey = api_key
+            with open(get_resource_path("api_key.txt"), 'w') as f:
+                f.write(self.apikey)
+            self._text_log_show(f"{self.time_str}: API Key saved to api_key.txt, and will be auto-loaded on next start.\n", "green")
         return True
 
     def start_asr(self):
-        if not self._check_has_input_api():
-            self.text_log.insert("end", f"{self.time_str}: Please input API Key for speech recognition!\n")
-            self.text_log.see("end")
-            return
-        else:
-            # 如果没有保存过，则保存到本地文件
-            if not os.path.exists(get_resource_path("api_key.txt")):
-                with open(get_resource_path("api_key.txt"), 'w') as f:
-                    f.write(self.apikey)
-            self.text_log.insert("end", f"{self.time_str}: API Key saved to api_key.txt, and will be auto-loaded on next start.\n")
-            self.text_log.see("end")
+        self._check_has_input_api()
+            
         self.btn_asr_start['state'] = 'disabled'
         self.btn_asr_stop['state'] = 'normal'
         self.is_speech_recognizing = True
@@ -657,12 +652,45 @@ class ScreenCapture(object):
             self.text_log.see("end")
 
     def show_help(self):
-        # open a new window, containing a text box with help information
-        help_window = tk.Toplevel(self.root)
-        help_window.title("Help")
-        help_text = tk.Text(help_window, wrap="word")
-        help_text.insert("end", "This is the help information.")
-        help_text.pack(expand=True, fill="both")
+        # Window 1: show help_image.png
+        import tkinter as tk
+        from PIL import Image, ImageTk
+        help_img_path = get_resource_path("assert/help_image.png")
+        win_img = tk.Toplevel(self.root)
+        win_img.title("Help Image")
+        try:
+            img = Image.open(help_img_path)
+            # Initial scale 50%
+            scale = 0.5
+            img_resized = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS if hasattr(Image, 'LANCZOS') else Image.BICUBIC)
+            tk_img = ImageTk.PhotoImage(img_resized)
+            label_img = tk.Label(win_img, image=tk_img)
+            label_img.image = tk_img
+            label_img.pack()
+        except Exception as e:
+            tk.Label(win_img, text=f"Image not found: {help_img_path}\n{e}", fg="red").pack()
+
+        # Window 2: show Markdown help text
+        win_md = tk.Toplevel(self.root)
+        win_md.title("Help Text")
+        help_md_path = get_resource_path("assert/help_md.md")
+        try:
+            with open(help_md_path, "r", encoding="utf-8") as f:
+                md_text = f.read()
+        except Exception as e:
+            md_text = "# Help\nNo help_text.md found.\n" + str(e)
+        text_widget = tk.Text(win_md, wrap="word")
+        text_widget.insert("end", md_text)
+        text_widget.pack(fill="both", expand=True)
+        text_widget.config(state="disabled")
+
+        # 显示一个按钮，点击后连接至项目GitHub页面
+        def open_github():
+            import webbrowser
+            webbrowser.open("https://github.com/ChenChenGith/Video_PPT_capture")
+
+        btn_github = tk.Button(win_md, text="See in GitHub", command=open_github)
+        btn_github.pack(pady=10)
 
     @property
     def time_str(self):
